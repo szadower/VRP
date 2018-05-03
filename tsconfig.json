@@ -1,0 +1,36 @@
+{
+    "compilerOptions": {
+        "allowJs": false,
+        "declaration": true,
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "forceConsistentCasingInFileNames": true,
+        "module": "commonjs",
+        "moduleResolution": "node",
+        /* "noImplicitAny": true,
+        "noImplicitReturns": true, */
+        "outDir": "./dist",
+        "preserveConstEnums": true,
+        "removeComments": true,
+        "rootDir": ".",
+        "sourceMap": true,
+        /* "strictNullChecks": true, */
+        "target": "es6",
+        "types": ["node"]
+    },
+    "filesGlob": [
+        "api/**/*.ts",
+        "api/**/**/*.ts",
+        "main/**/*.ts",
+        "main/**/**/*.ts",
+        "config/*.ts",
+        "config/**/*.ts",
+        "test/*.ts",
+        "test/**/*.ts",
+        "launchers/*.ts",
+        "app.ts"
+    ],
+    "atom": {
+        "rewriteTsconfig": false
+    }
+}
