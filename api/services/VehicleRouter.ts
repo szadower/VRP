@@ -2,6 +2,16 @@ class Vertex<T> {
   value: T
   weight: number
   edges: Array<{ to: Vertex<T>, weight: number }>
+
+  findNeighbour(to: Vertex<T>) {
+    return this.edges.find(x => x.to === to);
+  }
+
+  constructor (value, weight, edges) {
+    this.value = value;
+    this.weight = weight;
+    this.edges = edges;
+  }
 }
 
 class Graph<T> {
@@ -17,7 +27,7 @@ class Graph<T> {
   }
 
   public addNode(value: T, weight: number) {
-    return this.nodes.push({ value, weight, edges: [] }) - 1;
+    return this.nodes.push(new Vertex(value, weight, [] )) - 1;
   }
 
   public addEdge(from: number, to: number, weight: number) {
@@ -29,9 +39,9 @@ class Graph<T> {
     this.addEdge(to, from, weight);
   }
 
-  public get(id?: number) {
+  public get(id?: number): Vertex<T> {
     if (!id) id = 0;
-    return { ...this.nodes[id] };
+    return this.nodes[id];
   }
 
   public indexOf(searchElement , fromIndex = 0){
@@ -55,12 +65,16 @@ class Vehicle {
 class Path extends Graph<any> { // klasa niepubliczna, używana tylko do algorytmu
   // pojedyńcza droga w grafie
 
-  private _totalDistance: number;
+  private _totalDistance: number = 0;
   public get totalDistance(): number {
     return this._totalDistance;
   }
   public add(value: any, nodeWeight: number, edgeWeight: number) {
-
+    const pos = this.addNode(value, nodeWeight);
+    if (pos > 0) {
+      this.addEdge(pos - 1, pos, edgeWeight);
+      this._totalDistance += edgeWeight;
+    }
   }
 
   public addEdge(from: number, to: number, weight: number) {
@@ -77,17 +91,36 @@ class Path extends Graph<any> { // klasa niepubliczna, używana tylko do algoryt
   public isCycle() {
     const head = this.get();
   }
+
+  public toString():string {
+    let s = '';
+    let head = this.get();
+    while (head !== null) {
+      if(head.edges[0]) {
+        s += `${head.value}(${head.weight}) ==(${Math.floor(head.edges[0].weight)})=>`;
+        head = head.edges[0].to
+      } else {
+        s += `${head.value}(${head.weight})`;
+        head = null;
+      }
+    }
+    return s;
+  }
 }
 
 class Route {
   // zestaw n drog na grafie tworzących rozwiązanie vrp
   // tutaj drogi muszą byc powiązane z pojazdami
-  constructor(paths: Array<Path>) {
+  public paths;
+  constructor(paths: Array<{path: Path, vehicle: Vehicle}>) {
+    this.paths = paths;
   }
 
   private _totalDistance: number;
   public get totalDistance(): number {
-    return this.totalDistance;
+    let tD = 0;
+    this.paths.forEach(x => tD+=x.totalDistance);
+    return ;
   }
 }
 
@@ -147,12 +180,12 @@ class VehicleRouter {
 
   private graph: Graph<any>;
   private vehicles: Array<Vehicle>;
-  private deport: number;
+  private deport: Vertex<any>;
 
   constructor(graph: Graph<any>, vehicles: Array<any>, deport: number) {
     this.graph = graph;
     this.vehicles = vehicles;
-    this.deport = deport;
+    this.deport = this.graph.get(deport);
   }
 
   public antColonySystem(iterations: number, groups: number): Route {
@@ -165,11 +198,10 @@ class VehicleRouter {
         const ants: Array<Ant> = this.vehicles.map(v => new Ant(v, antGraph));
         const group = new AntGroup(antGraph, ants);
         const paths: Array<Path> = group.constructPaths();
-        iterationRoutes.push(new Route(paths));
+        //iterationRoutes.push(new Route(paths));
       }
       iterationRoutes.forEach(r => (optimalRoute.totalDistance > r.totalDistance ? optimalRoute = r : null));
       antGraph.globalUpdate(optimalRoute);
-
     }
     return optimalRoute;
   }
@@ -178,24 +210,51 @@ class VehicleRouter {
     const route: Route = null;
     const visited: Array<any> = [];
     const vehicles = this.vehicles.map(v => ({
-      capacity: v.capacity,
-      position: this.graph.get(this.deport),
+      vehicle: v,
+      position: this.deport,
       load: 0,
       path: new Path(),
     }));
-    while (visited.length < this.graph.length) {
+    vehicles.forEach(v => v.path.addNode(this.deport.value, 0));
+    let flag = true;
+    while (flag) {
+      flag = false;
       vehicles.forEach((v) => {
-        if (visited.length >= this.graph.length) return;
-        let target: { to: Vertex<any>, weight: number } = null;
-        v.position.edges.forEach(x => ((!target || target.weight > x.weight) ? target = x : null));
-        v.path.add(target.to.value, target.to.weight, target.weight);
-        v.position = target.to;
+        let target: { to: Vertex<any>, weight: number } = v.position === this.deport ? null : {to: this.deport, weight: v.position.findNeighbour(this.deport).weight };
+        if (visited.length >= this.graph.length) {
+          target = {to: this.deport, weight: 0}
+        } else {
+          v.position.edges.forEach(x => {
+            if (
+              visited.indexOf(x.to) === -1 &&
+              (!target || (target.weight > x.weight &&
+                x.to.weight <= v.vehicle.capacity - v.load))
+              ) {
+                target = x;
+              }
+            });
+        }
+        if(target) {
+          flag = true;
+          v.path.add(target.to.value, target.to.weight, target.weight);
+          v.position = target.to;
+          if(target.to === this.deport) {
+            v.load = 0;
+          } else {
+            visited.push(target.to);
+            v.load += target.to.weight;
+          }
+        }
       });
     }
-    vehicles.forEach((v) => {
-      v.path.addEdge(this.graph.indexOf(v.position), this.deport, v.position.edges.find(n => n.to === this.graph.get(this.deport)).weight);
-    });
-    return new Route(vehicles.map(v => v.path));
+    vehicles.forEach(x => console.log(x.path));
+    return new Route(vehicles);
   }
 
 }
+module.exports = {
+  VehicleRouter,
+  Graph,
+  Route,
+}
+export default VehicleRouter;
