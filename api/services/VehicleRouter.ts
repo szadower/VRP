@@ -1,22 +1,38 @@
-class Vertex<T> {
-  value: T
-  weight: number
-  edges: Array<{ to: Vertex<T>, weight: number }>
+class Edge<T> {
+  public to: Vertex<any>;
+  public from: Vertex<any>;
+  public weight: number;
+  public value: T;
 
-  findNeighbour(to: Vertex<T>) {
-    return this.edges.find(x => x.to === to);
+  constructor(to, from, weight, value) {
+    this.to = to;
+    this.from = from;
+    this.weight = weight;
+    this.value = value;
   }
+}
 
-  constructor (value, weight, edges) {
+class Vertex<T> {
+  public value: T;
+  public weight: number;
+  public id: number;
+  public edges: Array<Edge<any>>;
+
+  constructor(value, weight, edges, id?) {
     this.value = value;
     this.weight = weight;
     this.edges = edges;
+    this.id = id;
+  }
+
+  public findNeighbour(to: Vertex<T>) {
+    return this.edges.find(x => x.to === to);
   }
 }
 
 class Graph<T> {
   // graf ważony na krawędzich i węzach zawierający CVRP
-  private nodes: Array<Vertex<T>>;
+  protected nodes: Array<Vertex<T>>;
 
   constructor() {
     this.nodes = [];
@@ -27,11 +43,11 @@ class Graph<T> {
   }
 
   public addNode(value: T, weight: number) {
-    return this.nodes.push(new Vertex(value, weight, [] )) - 1;
+    return this.nodes.push(new Vertex(value, weight, [], this.nodes.length)) - 1;
   }
 
   public addEdge(from: number, to: number, weight: number) {
-    this.nodes[from].edges.push({ to: this.nodes[to], weight });
+    this.nodes[from].edges.push(new Edge(this.nodes[to], this.nodes[from], weight, null));
   }
 
   public addUndirectedEdge(from: number, to: number, weight: number) {
@@ -44,15 +60,15 @@ class Graph<T> {
     return this.nodes[id];
   }
 
-  public indexOf(searchElement , fromIndex = 0){
+  public indexOf(searchElement , fromIndex = 0) {
     return this.nodes.indexOf(searchElement, fromIndex);
   }
 
-  public forEach(callback: (value: Vertex<T>, index: number, array: Vertex<T>[]) => void) {
+  public forEach(callback: (value: Vertex<T>, index: number, array: Array<Vertex<T>>) => void) {
     this.nodes.forEach(callback);
   }
 
-  public map(callback: (value: Vertex<T>, index: number, array: Vertex<T>[]) => void) {
+  public map(callback: (value: Vertex<T>, index: number, array: Array<Vertex<T>>) => void): any[] {
     return this.nodes.map(callback);
   }
 }
@@ -60,50 +76,50 @@ class Graph<T> {
 class Vehicle {
   // klasa zawierająca informacje o pojeździe
   public capacity;
+  public name;
 }
 
-class Path extends Graph<any> { // klasa niepubliczna, używana tylko do algorytmu
+class Path { // klasa niepubliczna, używana tylko do algorytmu
   // pojedyńcza droga w grafie
 
+  private edges: Array<Edge<any>> = [];
   private _totalDistance: number = 0;
   public get totalDistance(): number {
     return this._totalDistance;
   }
-  public add(value: any, nodeWeight: number, edgeWeight: number) {
-    const pos = this.addNode(value, nodeWeight);
-    if (pos > 0) {
-      this.addEdge(pos - 1, pos, edgeWeight);
-      this._totalDistance += edgeWeight;
+
+  public add(edge: Edge<any>) {
+    if (this.edges.length <= 0 || this.edges[this.edges.length - 1].to === edge.from) {
+      this.edges.push(edge);
+      this._totalDistance += edge.weight;
     }
   }
-
-  public addEdge(from: number, to: number, weight: number) {
-    if(this.get(from).edges.length === 0) {
-      super.addEdge(from, to, weight);
-      this._totalDistance += weight;
-    }
+  public get(id?: number) {
+    if (!id) id = 0;
+    return this.edges[0];
   }
 
-  public addUndirectedEdge(from: number, to: number, weight: number) {
-    this.addEdge(from, to, weight);
+  public forEach(callback) {
+    this.edges.forEach(callback);
+  }
+
+  public map(callback: (value: Edge<any>, index: number, array: Array<Edge<any>>) => void): any[] {
+    return this.edges.map(callback);
   }
 
   public isCycle() {
-    const head = this.get();
+    return this.edges.length > 0 || this.edges[0].from === this.edges[this.edges.length - 1].to;
   }
 
-  public toString():string {
-    let s = '';
-    let head = this.get();
-    while (head !== null) {
-      if(head.edges[0]) {
-        s += `${head.value}(${head.weight}) ==(${Math.floor(head.edges[0].weight)})=>`;
-        head = head.edges[0].to
+  public toString(): string {
+    let s = "";
+    this.edges.forEach((e, i) =>  {
+      if (i === 0) {
+        s += `${e.from.value}(${e.from.weight}) =(${Math.floor(e.weight)})> ${e.to.value}(${e.to.weight})`;
       } else {
-        s += `${head.value}(${head.weight})`;
-        head = null;
+        s += ` =(${Math.floor(e.weight)})> ${e.to.value}(${e.to.weight})`;
       }
-    }
+    });
     return s;
   }
 }
@@ -119,59 +135,150 @@ class Route {
   private _totalDistance: number;
   public get totalDistance(): number {
     let tD = 0;
-    this.paths.forEach(x => tD+=x.totalDistance);
-    return ;
-  }
-}
-
-class Ant { // klasa niepubliczna, używana tylko do algorytmu
-  // mrowka
-  private capacity: number;
-  private graph: AntColonyGraph;
-  private group: AntGroup;
-  constructor(v: Vehicle, graph: AntColonyGraph) {
-    this.capacity = v.capacity;
-    this.graph = graph;
-  }
-
-  public setGroup(group: AntGroup) {
-    this.group = group;
-  }
-
-  public constructPath(): Path {
-    return null;
+    this.paths.forEach(x => tD += x.path.totalDistance);
+    return tD;
   }
 }
 
 class AntColonyGraph extends Graph<any> { // klasa niepubliczna, używana tylko do algorytmu
   // graf + feromony
-  constructor(graph: Graph<any>) {
+  public pheromoneDecay: number;
+  public deport: Vertex<any>;
+  public randomSelectionChance: number;
+  public distanceImportanceFactor: number;
+  public deltaTau: number;
+  constructor(
+    graph: Graph<any>,
+    basePheromone: number,
+    pheromoneDecay: number,
+    deport: number,
+    randomSelectionChance: number,
+    distanceImportanceFactor: number,
+  ) {
     super();
+    this.pheromoneDecay = pheromoneDecay;
+    this.nodes = graph.map((v): Vertex<any> => new Vertex(v.value, v.weight, [], v.id));
+    graph.forEach((v, i) => {
+      this.nodes[i].edges = v.edges.map(e => new Edge(this.nodes[e.to.id], this.nodes[i], e.weight, basePheromone));
+    });
+    this.deport = this.get(deport);
+    this.deltaTau = basePheromone;
+    this.randomSelectionChance = randomSelectionChance;
+    this.distanceImportanceFactor = distanceImportanceFactor;
   }
 
   public globalUpdate(route: Route) {
+    this.forEach(v => v.edges.forEach(e => e.value = (1 - this.pheromoneDecay) * e.value));
+    route.paths.forEach((p) => {
+      p.path.forEach((e) => {
+        e.value = this.pheromoneDecay * (1 / route.totalDistance);
+      });
+    });
+  }
 
+  public localUpdate(edge: Edge<any>, deltaTau?: number) {
+    if (!deltaTau) deltaTau = this.deltaTau;
+    edge.value = (1 - this.pheromoneDecay) * edge.value + this.pheromoneDecay * deltaTau;
   }
 }
 
 class AntGroup { // klasa niepubliczna, używana tylko do algorytmu
   // (graf + feromony) + czy mrowki byly
-  private visited: Array<any>;
+  private visited: any[];
+  private ants: Ant[];
 
-  constructor(graph: AntColonyGraph, ants: Array<Ant>) {
+  constructor(ants: Ant[]) {
     this.visited = [];
+    this.ants = ants;
   }
 
-  public constructPaths() {
-    return [];
+  public constructRoute(): Route {
+    const route: Route = null;
+    let flag = true;
+    while (flag) {
+      flag = false;
+      this.ants.forEach(a => flag = !a.step(this.visited) || flag);
+    }
+    return new Route(this.ants);
+  }
+}
+
+class Ant { // klasa niepubliczna, używana tylko do algorytmu
+  // mrowka
+  private position: Vertex<any>;
+  private load: number;
+  private _vehicle: Vehicle;
+  private graph: AntColonyGraph;
+  private _path: Path;
+
+  constructor(v: Vehicle, graph: AntColonyGraph) {
+    this._vehicle = v;
+    this.graph = graph;
+    this.load = 0;
+    this.position = graph.deport;
+    this._path = new Path();
   }
 
-  public useNode(node: any) {
-    this.visited.push(node);
+  public resetAnt() {
+    this.load = 0;
+    this._path = new Path();
   }
 
-  public resupplyNodes() {
-    this.visited = [];
+  public get path() {
+    return this._path;
+  }
+
+  public get vehicle() {
+    return this._vehicle;
+  }
+
+  public step(visited: Array<Vertex<any>>): boolean { // returns if path is closed (in deport and nowhere to go)
+    let target: {edge: Edge<any>, attractiveness: number} = null;
+    const targets = [];
+    let flag = true;
+    let omega = 0;
+    if (this.position !== this.graph.deport) {
+      const toDeport = this.position.findNeighbour(this.graph.deport);
+      target = {
+        edge: toDeport,
+        attractiveness: this.edgeAttractiveness(toDeport),
+      };
+    }
+    if (visited.length < this.graph.length) {
+      this.position.edges.forEach(x => {
+        if (visited.indexOf(x.to) === -1 && x.to.weight <= this.vehicle.capacity - this.load) {
+          const temp = { edge: x, attractiveness: this.edgeAttractiveness(x) };
+          targets.push(temp);
+          omega += temp.attractiveness;
+          if (!target || target.attractiveness > temp.attractiveness) target = temp;
+        }
+      });
+    }
+    if (Math.random() > this.graph.randomSelectionChance) {
+      const randomChoice = Math.random() * omega;
+      let helper = 0;
+      for (let i = 0; i < targets.length && helper < randomChoice; i++) {
+        target = targets[i];
+        helper += target.attractiveness;
+      }
+    }
+    if (target) {
+      flag = false;
+      this.path.add(target.edge);
+      this.position = target.edge.to;
+      this.graph.localUpdate(target.edge);
+      if (target.edge.to === this.graph.deport) {
+        this.load = 0;
+      } else {
+        visited.push(target.edge.to);
+        this.load += target.edge.to.weight;
+      }
+    }
+    return flag;
+  }
+
+  private edgeAttractiveness(edge: Edge<any>) {
+    return edge.value * Math.pow(10 / edge.weight, this.graph.distanceImportanceFactor);
   }
 }
 
@@ -179,51 +286,71 @@ class VehicleRouter {
   // tu dzieje się
 
   private graph: Graph<any>;
-  private vehicles: Array<Vehicle>;
-  private deport: Vertex<any>;
+  private vehicles: Vehicle[];
+  private deport: number;
 
-  constructor(graph: Graph<any>, vehicles: Array<any>, deport: number) {
+  constructor(graph: Graph<any>, vehicles: any[], deport: number) {
     this.graph = graph;
     this.vehicles = vehicles;
-    this.deport = this.graph.get(deport);
+    this.deport = deport;
   }
 
-  public antColonySystem(iterations: number, groups: number): Route {
-    const antGraph: AntColonyGraph = new AntColonyGraph(this.graph);
-    let optimalRoute: Route = this.nearestNeighbourAlgorithm();
-
-    for (let i: number = 0; i < iterations; i++) {
-      const iterationRoutes: Array<Route> = [];
-      for (let j: number = 0; j < groups; j++) {
-        const ants: Array<Ant> = this.vehicles.map(v => new Ant(v, antGraph));
-        const group = new AntGroup(antGraph, ants);
-        const paths: Array<Path> = group.constructPaths();
-        //iterationRoutes.push(new Route(paths));
-      }
-      iterationRoutes.forEach(r => (optimalRoute.totalDistance > r.totalDistance ? optimalRoute = r : null));
+  public antColonySystem(
+    iterations: number,
+    groups: number,
+    pheromoneDecay: number, // p
+    tauZero: number,
+    randomSelectionChance: number, // q0
+    distanceImportanceFactor: number, // beta
+  ): Route {
+    const antGraph: AntColonyGraph = new AntColonyGraph(
+      this.graph,
+      tauZero,
+      pheromoneDecay, // p
+      this.deport,
+      randomSelectionChance, // q0
+      distanceImportanceFactor, // beta
+    );
+    let optimalRoute: Route = this.nearestNeighbourAlgorithm(antGraph, this.deport);
+    let flag = true;
+    for (let i: number = 0; i < iterations && flag; i++) {
       antGraph.globalUpdate(optimalRoute);
+      const iterationRoutes: Route[] = [];
+      for (let j: number = 0; j < groups; j++) {
+        const ants: Ant[] = this.vehicles.map(v => new Ant(v, antGraph));
+        const group = new AntGroup(ants);
+        iterationRoutes.push(group.constructRoute());
+      }
+      const last = optimalRoute.totalDistance;
+      iterationRoutes.forEach(r => (optimalRoute.totalDistance > r.totalDistance ? optimalRoute = r : null));
     }
     return optimalRoute;
   }
 
-  public nearestNeighbourAlgorithm(): Route {
+  public nearestNeighbourAlgorithm(graph?: Graph<any>, deport?: number, vehicles?: Vehicle[]): Route {
+    if (!graph) graph = this.graph;
+    const deportPoint = graph.get(deport ? deport : this.deport);
+    if (!vehicles) vehicles = this.vehicles;
     const route: Route = null;
-    const visited: Array<any> = [];
-    const vehicles = this.vehicles.map(v => ({
+    const visited: any = [];
+    const activeVehicles = vehicles.map(v => ({
       vehicle: v,
-      position: this.deport,
+      position: deportPoint,
       load: 0,
       path: new Path(),
     }));
-    vehicles.forEach(v => v.path.addNode(this.deport.value, 0));
     let flag = true;
     while (flag) {
       flag = false;
-      vehicles.forEach((v) => {
-        let target: { to: Vertex<any>, weight: number } = v.position === this.deport ? null : {to: this.deport, weight: v.position.findNeighbour(this.deport).weight };
-        if (visited.length >= this.graph.length) {
-          target = {to: this.deport, weight: 0}
-        } else {
+      activeVehicles.forEach((v) => {
+        let target: Edge<any> = null;
+        let help: number = 0;
+        if (v.position !== deportPoint) {
+          target = v.position.findNeighbour(deportPoint);
+          help = target.weight;
+          target.weight = Number.MAX_SAFE_INTEGER;
+        }
+        if (visited.length < graph.length) {
           v.position.edges.forEach(x => {
             if (
               visited.indexOf(x.to) === -1 &&
@@ -234,11 +361,12 @@ class VehicleRouter {
               }
             });
         }
-        if(target) {
+        if (target) {
+          if (v.position !== deportPoint) v.position.findNeighbour(deportPoint).weight = help;
           flag = true;
-          v.path.add(target.to.value, target.to.weight, target.weight);
+          v.path.add(target);
           v.position = target.to;
-          if(target.to === this.deport) {
+          if (target.to === deportPoint) {
             v.load = 0;
           } else {
             visited.push(target.to);
@@ -247,8 +375,7 @@ class VehicleRouter {
         }
       });
     }
-    vehicles.forEach(x => console.log(x.path));
-    return new Route(vehicles);
+    return new Route(activeVehicles);
   }
 
 }
@@ -256,5 +383,5 @@ module.exports = {
   VehicleRouter,
   Graph,
   Route,
-}
+};
 export default VehicleRouter;
