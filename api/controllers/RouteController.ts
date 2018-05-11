@@ -102,4 +102,43 @@ module.exports = {
     res.send(response);
   },
 
+  testRandom: (req, res) => {
+    const options = JSON.parse(req.query.options);
+    const tries = req.query.tries ? req.query.tries : 1;
+    const nodes = req.query.nodes ? req.query.nodes : 10;
+    const vehiclesNumber = req.query.vehicles ? req.query.vehicles : 3;
+    const test = new Graph();
+    const vehicles = [];
+    for (let i = 0; i < nodes; i++) test.addNode(`punkt${i}`, Math.random() * 9);
+    for (let i = 0; i < vehiclesNumber; i++) vehicles.push({ name:`P${i}`, capacity: (Math.random() * 10) + 10});
+    const deport = test.addNode("deport", 0);
+    test.forEach((x, i) => {
+      test.forEach((y, j) => i !== j ? test.addEdge(i, j, Math.random() * 9) : null);
+    });
+    const router = new VehicleRouter.VehicleRouter(test, vehicles, deport);
+    const route = router.nearestNeighbourAlgorithm();
+    let response = "";
+    route.paths.forEach((x) => {
+      response += `Pojazd: ${x.vehicle.name} pojemność: ${x.vehicle.capacity} <br>`;
+      response += `Trasa: ${x.path.toString()}<br>`;
+    });
+    response += `Calkowita dlugośc = ${route.totalDistance}`;
+    response += "<br><br>";
+    const results = options.map(x => 0);
+    for (let i = 0; i < tries; i++) {
+      options.forEach((set, index: number) => results[index] += router.antColonySystem(...set).totalDistance);
+    }
+    options.forEach((set, index) => {
+      response += `iterations: ${set[0]},
+        groups: ${set[1]},
+        pheromoneDecay: ${set[2]},
+        tauZero: ${set[3]},
+        randomSelectionChance: ${set[4]},
+        distanceImportanceFactor: ${set[5]}<br>`;
+      response += `średnia dlugośc = ${results[index] / tries}`;
+      response += "<br><br>";
+    });
+
+    res.send(response);
+  }
 };

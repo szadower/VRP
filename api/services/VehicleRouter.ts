@@ -147,6 +147,7 @@ class AntColonyGraph extends Graph<any> { // klasa niepubliczna, używana tylko 
   public randomSelectionChance: number;
   public distanceImportanceFactor: number;
   public deltaTau: number;
+  public defaultLength: number;
   constructor(
     graph: Graph<any>,
     basePheromone: number,
@@ -171,7 +172,7 @@ class AntColonyGraph extends Graph<any> { // klasa niepubliczna, używana tylko 
     this.forEach(v => v.edges.forEach(e => e.value = (1 - this.pheromoneDecay) * e.value));
     route.paths.forEach((p) => {
       p.path.forEach((e) => {
-        e.value = this.pheromoneDecay * (1 / route.totalDistance);
+        e.value = this.pheromoneDecay * (this.defaultLength / route.totalDistance);
       });
     });
   }
@@ -312,6 +313,7 @@ class VehicleRouter {
       distanceImportanceFactor, // beta
     );
     let optimalRoute: Route = this.nearestNeighbourAlgorithm(antGraph, this.deport);
+    antGraph.defaultLength = optimalRoute.totalDistance;
     let flag = true;
     for (let i: number = 0; i < iterations && flag; i++) {
       antGraph.globalUpdate(optimalRoute);
@@ -324,6 +326,50 @@ class VehicleRouter {
       const last = optimalRoute.totalDistance;
       iterationRoutes.forEach(r => (optimalRoute.totalDistance > r.totalDistance ? optimalRoute = r : null));
     }
+    return optimalRoute;
+  }
+
+  public async asyncAntColonySystem(
+    iterations: number,
+    groups: number,
+    pheromoneDecay: number, // p
+    tauZero: number,
+    randomSelectionChance: number, // q0
+    distanceImportanceFactor: number, // beta
+  ): Promise<Route> {
+    const antGraph: AntColonyGraph = new AntColonyGraph(
+      this.graph,
+      tauZero,
+      pheromoneDecay, // p
+      this.deport,
+      randomSelectionChance, // q0
+      distanceImportanceFactor, // beta
+    );
+    let optimalRoute: Route = this.nearestNeighbourAlgorithm(antGraph, this.deport);
+    antGraph.defaultLength = optimalRoute.totalDistance;
+    let flag = true;
+    const promises = []
+    for (let i: number = 0; i < iterations && flag; i++) {
+      promises.push((async () => {
+        antGraph.globalUpdate(optimalRoute);
+        const iterationRoutes: Route[] = [];
+        const morePromises = [];
+        for (let j: number = 0; j < groups; j++) {
+          promises.push((async () => {
+            const ants: Ant[] = this.vehicles.map(v => new Ant(v, antGraph));
+            const group = new AntGroup(ants);
+            iterationRoutes.push(group.constructRoute());
+          })());
+        }
+        await Promise.all(morePromises).then(() => console.log("morePromises then"));
+        const last = optimalRoute.totalDistance;
+        console.log("after morePromises");
+        iterationRoutes.forEach(r => (optimalRoute.totalDistance > r.totalDistance ? optimalRoute = r : null));
+      })());
+    }
+    console.log("promises before");
+    await Promise.all(promises).then(() => console.log("promises then"));
+    console.log(optimalRoute);
     return optimalRoute;
   }
 
