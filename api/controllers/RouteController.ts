@@ -1,30 +1,49 @@
 declare let sails: any;
 declare let VehicleRouter: any;
 declare let Route: any;
+declare let Order: any;
+declare let Point: any;
 declare let MapsService: any;
 const  { Graph } = VehicleRouter;
 
 module.exports = {
   generate: async (req: any, res: any) => {
+    sails.log.info("Generate Route");
     const data = req.body;
-    if (!data || !(data.id || (data.vehicles && data.orders))) return res.badRequest();
-    if (!data.options) data.options = {};
-    let route;
-    if (data.id) route = await Route.find({ where: { id: data.id }}).populateAll();
-    else {
-      const vehicles = data.vehicles;
-      const orders = data.orders;
-    }
+    if (!data || !data.id || !data.options) return res.badRequest();
+
+    const route = (await Route.findOne({ where: { id: data.id }}).populateAll());
     const graph = new Graph();
+    let promises = route.orders.map((o) => Point.find({ where: { id: o.position }}));
+    const points = await Promise.all(promises).then(results => results.map(p => p[0]));
+    points.push(route.deport);
     route.orders.forEach(order => graph.addNode(order, order.size));
     const deport: number = graph.addNode(route.deport, 0);
-    const distances = await MapsService.getDistanceMatrix(route.orders.concat([route.deport]));
-    distances.forEach((x, i) => x.elements.forEach((d, j) => {
-      if (i !== j) graph.addUndirectedEdge(i, j, d.distance);
-    }));
-    const router = new VehicleRouter.VehicleRouter(graph, route.orders, deport);
+    const distances = await MapsService.getDistanceMatrix(points);
+    distances.forEach((x, i) => x ? x.elements.forEach((d, j) => {
+      if (i !== j && d) graph.addEdge(i, j, Number(d.distance));
+    }) : null);
+
+    const router = new VehicleRouter.VehicleRouter(graph, route.vehicles, deport);
     const result = router.antColonySystem(...data.options);
-    return res.status(200).json(result);
+
+    promises = [];
+    result.paths.forEach((p) => {
+      p.path.forEach((edge, i) => {
+        if (i !== deport) {
+          promises.push(Order.update({ id: edge.from.value.id }).set({ positionInRoute: i, vehicle: p.vehicle.id }));
+        }
+      });
+    });
+    await Promise.all(promises).catch(err => sails.log.error(err));
+    const orders = await Order.find({
+      where: { route: data.id, positionInRoute: { "!": null } },
+      sort: { vehicle:  "ASC", positionInRoute: "ASC" },
+    }).populate("position");
+    return res.status(200).send({
+      route: await Route.findOne({ where: { id: data.id } }).populate("vehicles"),
+      orders,
+    });
   },
 
   test: (req,res) => {
@@ -49,31 +68,31 @@ module.exports = {
     test.addNode("punkt 14", 8);
     test.addNode("deport", 0);
     const weights = [
+      1, 7, 2, 4, 7, 2, 8, 1, 7, 2, 4,
+      3, 4, 7, 5, 3, 6, 6, 7, 4, 1, 7,
+      4, 4, 2, 7, 3, 8, 2, 5, 5, 1, 2,
       4, 5, 6, 4, 1, 6, 9, 6, 8, 6, 4,
       2, 7, 4, 4, 7, 9, 9, 8, 7, 7, 2,
-      5, 7, 3, 3, 1, 6, 8, 7, 2, 3, 2,
-      5, 5, 8, 7, 3, 7, 8, 5, 5, 2, 8,
-      3, 4, 7, 5, 3, 6, 6, 7, 4, 1, 7,
-      6, 4, 4, 4, 7, 8, 9, 8, 4, 1, 9,
-      7, 9, 1, 6, 4, 6, 9, 6, 1, 3, 5,
-      2, 6, 1, 3, 9, 3, 3, 1, 3, 2, 6,
-      8, 3, 4, 5, 8, 9, 7, 2, 1, 6, 3,
+      9, 7, 1, 6, 5, 1, 1, 8, 3, 3, 2,
       9, 7, 4, 9, 2, 2, 9, 5, 1, 9, 7,
       8, 3, 1, 3, 8, 9, 5, 7, 7, 4, 3,
+      8, 6, 8, 3, 4, 8, 3, 6, 6, 6, 5,
+      5, 5, 8, 7, 3, 7, 8, 5, 5, 2, 8,
+      8, 3, 4, 5, 8, 9, 7, 2, 1, 6, 3,
+      1, 7, 2, 4, 7, 1, 8, 1, 7, 2, 4,
       4, 5, 6, 4, 1, 6, 9, 6, 8, 6, 4,
-      4, 4, 2, 7, 3, 8, 2, 5, 5, 1, 2,
-      4, 4, 2, 3, 3, 8, 2, 7, 5, 1, 2,
-      1, 7, 2, 4, 7, 2, 8, 1, 7, 2, 4,
       6, 8, 3, 8, 8, 9, 8, 4, 7, 7, 2,
-      9, 7, 1, 6, 5, 1, 1, 8, 3, 3, 2,
+      2, 6, 1, 3, 9, 3, 3, 1, 3, 2, 6,
+      7, 9, 1, 6, 4, 6, 9, 6, 1, 3, 5,
       8, 6, 8, 3, 4, 8, 3, 6, 6, 6, 5,
-      8, 6, 8, 3, 4, 8, 3, 6, 6, 6, 5,
+      1, 7, 2, 4, 7, 1, 8, 1, 7, 2, 4,
       9, 7, 1, 6, 5, 1, 1, 8, 3, 3, 2,
-      6, 8, 3, 8, 8, 9, 8, 4, 7, 7, 2,
+      5, 7, 3, 3, 1, 6, 8, 7, 2, 3, 2,
       4, 5, 6, 4, 1, 6, 9, 6, 8, 6, 4,
       7, 1, 6, 4, 2, 8, 7, 8, 3, 4, 9,
-      1, 7, 2, 4, 7, 1, 8, 1, 7, 2, 4,
-      1, 7, 2, 4, 7, 1, 8, 1, 7, 2, 4,
+      4, 4, 2, 3, 3, 8, 2, 7, 5, 1, 2,
+      6, 8, 3, 8, 8, 9, 8, 4, 7, 7, 2,
+      6, 4, 4, 4, 7, 8, 9, 8, 4, 1, 9,
       8, 6, 8, 3, 4, 8, 3, 6, 6, 6, 5,
     ];
     test.forEach((x, i) => {

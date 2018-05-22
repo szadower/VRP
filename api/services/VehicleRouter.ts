@@ -115,9 +115,9 @@ class Path { // klasa niepubliczna, używana tylko do algorytmu
     let s = "";
     this.edges.forEach((e, i) =>  {
       if (i === 0) {
-        s += `${e.from.value}(${e.from.weight}) =(${Math.floor(e.weight)})> ${e.to.value}(${e.to.weight})`;
+        s += `${e.from.value.name ? e.from.value.name : e.from.value}(${e.from.weight}) =(${Math.floor(e.weight)})> ${e.to.value.name ? e.to.value.name : e.to.value}(${e.to.weight})`;
       } else {
-        s += ` =(${Math.floor(e.weight)})> ${e.to.value}(${e.to.weight})`;
+        s += ` =(${Math.floor(e.weight)})> ${e.to.value.name ? e.to.value.name : e.to.value}(${e.to.weight})`;
       }
     });
     return s;
@@ -247,18 +247,18 @@ class Ant { // klasa niepubliczna, używana tylko do algorytmu
     }
     if (visited.length < this.graph.length) {
       this.position.edges.forEach(x => {
-        if (visited.indexOf(x.to) === -1 && x.to.weight <= this.vehicle.capacity - this.load) {
+        if (visited.indexOf(x.to) === -1 && x.to.weight <= this.vehicle.capacity - this.load && x.to !== this.graph.deport) {
           const temp = { edge: x, attractiveness: this.edgeAttractiveness(x) };
           targets.push(temp);
           omega += temp.attractiveness;
-          if (!target || target.attractiveness > temp.attractiveness) target = temp;
+          if (!target || target.attractiveness < temp.attractiveness) target = temp;
         }
       });
     }
     if (Math.random() > this.graph.randomSelectionChance) {
       const randomChoice = Math.random() * omega;
       let helper = 0;
-      for (let i = 0; i < targets.length && helper < randomChoice; i++) {
+      for (let i = 0; i < targets.length && helper > randomChoice; i++) {
         target = targets[i];
         helper += target.attractiveness;
       }
@@ -269,17 +269,18 @@ class Ant { // klasa niepubliczna, używana tylko do algorytmu
       this.position = target.edge.to;
       this.graph.localUpdate(target.edge);
       if (target.edge.to === this.graph.deport) {
+
         this.load = 0;
       } else {
         visited.push(target.edge.to);
-        this.load += target.edge.to.weight;
+        this.load += Number(target.edge.to.weight);
       }
     }
     return flag;
   }
 
   private edgeAttractiveness(edge: Edge<any>) {
-    return edge.value * Math.pow(10 / edge.weight, this.graph.distanceImportanceFactor);
+    return edge.value * Math.pow(edge.weight > 0 ? 1 / edge.weight : 100, this.graph.distanceImportanceFactor);
   }
 }
 
@@ -314,8 +315,7 @@ class VehicleRouter {
     );
     let optimalRoute: Route = this.nearestNeighbourAlgorithm(antGraph, this.deport);
     antGraph.defaultLength = optimalRoute.totalDistance;
-    let flag = true;
-    for (let i: number = 0; i < iterations && flag; i++) {
+    for (let i: number = 0; i < iterations; i++) {
       antGraph.globalUpdate(optimalRoute);
       const iterationRoutes: Route[] = [];
       for (let j: number = 0; j < groups; j++) {
@@ -347,9 +347,8 @@ class VehicleRouter {
     );
     let optimalRoute: Route = this.nearestNeighbourAlgorithm(antGraph, this.deport);
     antGraph.defaultLength = optimalRoute.totalDistance;
-    let flag = true;
     const promises = []
-    for (let i: number = 0; i < iterations && flag; i++) {
+    for (let i: number = 0; i < iterations; i++) {
       promises.push((async () => {
         antGraph.globalUpdate(optimalRoute);
         const iterationRoutes: Route[] = [];
@@ -416,7 +415,7 @@ class VehicleRouter {
             v.load = 0;
           } else {
             visited.push(target.to);
-            v.load += target.to.weight;
+            v.load += Number(target.to.weight);
           }
         }
       });
