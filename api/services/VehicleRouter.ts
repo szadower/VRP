@@ -225,11 +225,11 @@ class Ant { // klasa niepubliczna, używana tylko do algorytmu
     this._path = new Path();
   }
 
-  public get path() {
+  public get path(): Path {
     return this._path;
   }
 
-  public get vehicle() {
+  public get vehicle(): Vehicle {
     return this._vehicle;
   }
 
@@ -425,6 +425,7 @@ class VehicleRouter {
   }
 
 }
+
 module.exports = {
   VehicleRouter,
   Graph,

@@ -1,8 +1,32 @@
 declare let sails: any;
 declare let VehicleRouter: any;
+declare let Route: any;
+declare let MapsService: any;
 const  { Graph } = VehicleRouter;
 
 module.exports = {
+  generate: async (req: any, res: any) => {
+    const data = req.body;
+    if (!data || !(data.id || (data.vehicles && data.orders))) return res.badRequest();
+    if (!data.options) data.options = {};
+    let route;
+    if (data.id) route = await Route.find({ where: { id: data.id }}).populateAll();
+    else {
+      const vehicles = data.vehicles;
+      const orders = data.orders;
+    }
+    const graph = new Graph();
+    route.orders.forEach(order => graph.addNode(order, order.size));
+    const deport: number = graph.addNode(route.deport, 0);
+    const distances = await MapsService.getDistanceMatrix(route.orders.concat([route.deport]));
+    distances.forEach((x, i) => x.elements.forEach((d, j) => {
+      if (i !== j) graph.addUndirectedEdge(i, j, d.distance);
+    }));
+    const router = new VehicleRouter.VehicleRouter(graph, route.orders, deport);
+    const result = router.antColonySystem(...data.options);
+    return res.status(200).json(result);
+  },
+
   test: (req,res) => {
     const options = JSON.parse(req.query.options);
     const tries = req.query.tries ? req.query.tries : 1;
