@@ -40,9 +40,27 @@ module.exports = {
       where: { route: data.id, positionInRoute: { "!": null } },
       sort: { vehicle:  "ASC", positionInRoute: "ASC" },
     }).populate("position");
+    result.paths.forEach((x) => {
+      sails.log.info(`Pojazd: ${x.vehicle.name} pojemność: ${x.vehicle.capacity} <br>`);
+      sails.log.info(`Trasa: ${x.path.toString()}<br>`);
+    });
     return res.status(200).send({
-      route: await Route.findOne({ where: { id: data.id } }).populate("vehicles"),
+      route: await Route.findOne({ where: { id: data.id } }).populate("vehicles").populate("deport"),
       orders,
+    });
+  },
+
+  get: async (req, res) => {
+    sails.log.info("Get Route");
+    const id = req.query.id;
+    if (!id) return res.badRequest();
+    sails.log.info(`id = ${id}`);
+    return res.status(200).send({
+      route: await Route.findOne({ where: { id } }).populate("vehicles").populate("deport"),
+      orders: await Order.find({
+        where: { route: id, positionInRoute: { "!": null } },
+        sort: { vehicle:  "ASC", positionInRoute: "ASC" },
+      }).populate("position"),
     });
   },
 
